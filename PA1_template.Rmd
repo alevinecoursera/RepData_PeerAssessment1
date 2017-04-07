@@ -1,25 +1,97 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+### This code produces time series plots of steps taken by activity monitoring device users  
+### Author: Aaron Levine  
+
+#### Load libraries  
+```{r}
+library(dplyr)
+library(plyr)
+```
 
 
-## Loading and preprocessing the data
+#### read in csv file  
+```{r}
+activity <- read.csv("activity.csv")
+```
 
+#### remove missing values  
+```{r}
+activitynonan <- filter(activity,!is.na(activity$steps))
+```
 
+#### mean number of steps, grouped by date  
+```{r}
+stepsperday<-tapply(activitynonan$steps,activitynonan$date,mean)
+```
 
-## What is mean total number of steps taken per day?
+#### remove dates with no steps  
+```{r}
+stepsperday<-stepsperday[!is.na(stepsperday)]
+```
 
+#### make histogram  
+```{r echo=TRUE}
+hist(stepsperday,xlab="Steps Per Day",ylab="Number of Days", main="Histogram of Mean Steps Per Day")
+```
 
+#### mean steps per day  
+```{r echo=TRUE}
+mean(stepsperday)
+```
 
-## What is the average daily activity pattern?
+#### median steps per day  
+```{r echo=TRUE}
+median(stepsperday)
+```
 
+#### create time series of steps per interval, each day, on average  
+```{r warning=FALSE}
+timeseriessteps<-aggregate(activitynonan,list(activitynonan$interval),mean)
 
+plot(timeseriessteps$interval,timeseriessteps$steps,type="l",xlab="Interval (5 minutes)", ylab="Mean Number of Steps")
+```
 
-## Imputing missing values
+#### time of max steps per day  
+```{r echo=TRUE}
+timeseriessteps[timeseriessteps$steps==max(timeseriessteps$steps),]$interval
+```
 
+#### function to remove missing values and replace with interval averages  
+```{r echo=TRUE}
+removena <- function(steps, interval,meansteps) {
+  if (is.na(steps)) {
+    steps<-meansteps[meansteps$interval==interval,]$steps}
+  steps
+}
+```
 
+#### remove missing values by applying removena function  
+```{r echo=TRUE}
+activity['stepsnonan'] <- apply(activity[,c('steps','interval')],1,function(x) removena(x[1],x[2],timeseriessteps))
+```
 
-## Are there differences in activity patterns between weekdays and weekends?
+#### function to add isweekend feature  
+```{r echo=TRUE}
+setweekend <- function(date){
+  dayofweek <- weekdays(as.POSIXlt(as.character(date),format="%Y-%m-%d"))
+  isweekend <- "weekday"
+  if(dayofweek=='Saturday'|dayofweek=='Sunday'){
+    isweekend<-"weekend"
+  }
+  isweekend
+}
+```
+
+#### apply function to add isweekend feature  
+```{r echo=TRUE}
+activity['isweekend'] <- as.factor(sapply(activity[,c('date')],function(x) setweekend(x)))
+
+```
+#### make time series for weekend and weekday and plot
+```{r warning=FALSE}
+timeseriessteps_weekend<-aggregate(activity[activity$isweekend=="weekend",],list(activity[activity$isweekend=="weekend",]$interval),mean)
+timeseriessteps_weekday<-aggregate(activity[activity$isweekend=="weekday",],list(activity[activity$isweekend=="weekday",]$interval),mean)
+
+par(mfrow=c(2,1))
+plot(timeseriessteps_weekday$interval,timeseriessteps_weekday$stepsnonan,type="l",xlab="Interval (5 minutes)", ylab="Mean Number of Steps",main="Weekday")
+plot(timeseriessteps_weekend$interval,timeseriessteps_weekend$stepsnonan,type="l",xlab="Interval (5 minutes)", ylab="Mean Number of Steps",main="Weekend")
+```
